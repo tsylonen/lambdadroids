@@ -18,6 +18,8 @@ angular_drag = 0.8
 map_width = 1024 :: Float
 map_height = 768 :: Float
 
+
+-- Type definitions
 type Vel = (Float, Float)
 type Pos = (Float, Float)
 type Angle = Float
@@ -39,7 +41,7 @@ updateEntity e t = e {pos = newPos, angle = newAngle, vel = (vx * drag, vy * dra
         oldSpin  = spin e
         newSpin  = oldSpin * angular_drag
 
--- add control to the ship entity
+-- Add control to the ship entity
 controlShip :: Entity -> TimeDelta -> GameInput -> Entity
 controlShip e t i = e {vel = newVel, spin = newSpin}
   where newVel = (vx + ctlx, vy + ctly)
@@ -63,11 +65,9 @@ shipStart = Entity {vel = (15, 10)
                    ,angle = 0
                    ,spin = 0}
 
-
 -- the ShineInput Entity of the ship
 ship :: Var ShineInput Entity
 ship = accumulate updateShip shipStart . ((,) <$> timeDeltaNumeric <*> keysDown)
-
 
 renderShip :: ImageData -> Var ShineInput Picture
 renderShip img = fmap f ship
@@ -79,7 +79,6 @@ worldRender :: ImageData -> ImageData -> Var ShineInput Picture
 worldRender bgrImage shipImage  =
   done (Image (Stretched (map_width*2) (map_height*2)) bgrImage)
   <> renderShip shipImage
-
 
 main :: IO ()
 main = runWebGUI $ \ webView -> do
