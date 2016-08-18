@@ -1,0 +1,3 @@
+[submodule "diagrams-ghcjs"]
+	path = diagrams-ghcjs
+	url = https://github.com/ghcjs/diagrams-ghcjs.git

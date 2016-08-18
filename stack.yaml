@@ -40,15 +40,20 @@ setup-info:
 #  subdirs:
 #  - auto-update
 #  - wai
+packages:
 # 
 # A package marked 'extra-dep: true' will only be built if demanded by a
 # non-dependency (i.e. a user package), and its test suites and benchmarks
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
+- location:
+    git: https://github.com/ghcjs/diagrams-ghcjs.git
+    commit: 411acffe0b3cb61b7d28b9b9ef404809ea5ab64d
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: []
+extra-deps: [shine-0.1.0.0, shine-varying-0.1.0.0, varying-0.5.0.3]
 
 # Override default flag values for local packages and extra-deps
 flags: {}
