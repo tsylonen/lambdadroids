@@ -8,12 +8,16 @@ import Control.Varying.Core
 import Web.KeyCode
 import GHCJS.DOM (webViewGetDomDocument, runWebGUI)
 import Data.Fixed (mod')
+import Data.Monoid (mconcat)
+import Data.Maybe (mapMaybe)
 
 -- Game related constants
 thrust = 500
 drag = 0.99
 angular_thrust = 50
 angular_drag = 0.8
+bullet_speed = 1000
+bullet_life  = 2
 
 map_width = 1024 :: Float
 map_height = 768 :: Float
@@ -43,9 +47,12 @@ type TimeDelta = Float
 
 data Entity = Entity {vel :: Vel, pos :: Pos, angle :: Angle, spin :: Spin}
             deriving (Eq, Show)
+type Ship = Entity
+data Bullet = Bullet {bulletEntity :: Entity, bulletLife :: TimeDelta}
+  deriving (Show)
 data Action = Thrust | TurnLeft | TurnRight | Shoot | NoAction
             deriving (Eq, Show)
-data WorldState = WorldState {worldShip :: Entity, worldAsteroids :: [Entity], worldBullets :: [Entity]}
+data WorldState = WorldState {worldShip :: Ship, worldAsteroids :: [Entity], worldBullets :: [Bullet]}
                 deriving (Show)
 
 keyToAction :: Key -> Action
@@ -64,34 +71,58 @@ updateEntity tΔ e = e {pos = newPos, angle = newAngle, vel = newVel, spin = new
         newVel = scale drag (vel e)
 
 -- Add control to the ship entity
-controlShip :: TimeDelta -> [Action] -> Entity -> Entity
-controlShip tΔ input e = e {vel = newVel, spin = newSpin}
-  where newVel    = (vel e) <+> thrustVec
-        newSpin   = (spin e + ctrlSign * angular_thrust * tΔ)
+controlShip :: TimeDelta -> [Action] -> Ship -> Ship
+controlShip tΔ input s = s {vel = newVel, spin = newSpin}
+  where newVel    = (vel s) <+> thrustVec
+        newSpin   = (spin s + ctrlSign * angular_thrust * tΔ)
         ctrlSign  = case (elem TurnLeft input, elem TurnRight input) of
                      (True, False) -> -1
                      (False, True) ->  1
                      (_,_)         ->  0
         thrustVec = if elem Thrust input
-                    then rotate (angle e) (tΔ * thrust, 0)
+                    then rotate (angle s) (tΔ * thrust, 0)
                     else (0,0)
+                  
+updateBullet :: TimeDelta -> Bullet -> Maybe Bullet
+updateBullet tΔ b = if newLife > 0
+                      then Just b {bulletEntity = updateEntity tΔ (bulletEntity b)
+                             ,bulletLife = newLife}
+                    else Nothing
+  where newLife = bulletLife b - tΔ
 
 updateWorld :: WorldState -> (TimeDelta, [Action]) -> WorldState
 updateWorld world (tΔ, input) = WorldState {worldShip = newShip, worldAsteroids = newAsteroids, worldBullets = newBullets}
-  where newShip      = controlShip tΔ input $ updateEntity tΔ (worldShip world)
+  where newShip      = controlShip tΔ input $ updateEntity tΔ oldShip
+        oldShip      = worldShip world
         newAsteroids = map (updateEntity tΔ) (worldAsteroids world)
-        newBullets   = map (updateEntity tΔ) (worldBullets world)
+        movedBullets = mapMaybe (updateBullet tΔ) (worldBullets world)
+        newBullets   = case elem Shoot input of
+                         True -> newBullet newShip : movedBullets
+                         _    -> movedBullets
 
+newBullet :: Ship -> Bullet
+newBullet s = Bullet {bulletEntity = e, bulletLife = bullet_life}
+        where e = Entity {vel = vel s <+> rotate (angle s) (bullet_speed, 0)
+                           ,pos = pos s <+> rotate (angle s) (20, 0)
+                           ,angle = angle s
+                           ,spin = 0}
+          
 -- begin state of the world
 worldStart :: WorldState
 worldStart = WorldState {worldShip = Entity {vel = (0,0), pos = (200,200), angle = 0, spin = 0}
                         ,worldAsteroids = []
                         ,worldBullets = []}
 
-renderShip :: ImageData -> Entity -> Picture
-renderShip img ship = Translate x y $ Rotate (angle ship + pi/2) $ shipPic
+renderShip :: ImageData -> Ship -> Picture
+renderShip img ship = Translate x y $ Rotate α $ shipPic
                where (x, y)  = pos ship
+                     α       = angle ship + pi/2
                      shipPic = Image Original img
+
+renderBullet :: Bullet -> Picture
+renderBullet b = Translate x y $ Rotate α $ Colored (Color 255 255 255 1) $ RectF 5 5
+  where (x, y) = pos $ bulletEntity b
+        α      = angle (bulletEntity b) + pi/2
 
 worldRunner :: Var ShineInput WorldState
 worldRunner = accumulate updateWorld worldStart . ((,) <$> timeDeltaNumeric <*> actions)
@@ -102,6 +133,7 @@ worldRender :: ImageData -> ImageData -> Var ShineInput Picture
 worldRender bgrImage shipImage  = fmap render worldRunner
   where render world = (Image (Stretched (map_width*2) (map_height*2)) bgrImage)
                        <> renderShip shipImage (worldShip world)
+                       <> (mconcat $ map renderBullet (worldBullets world))
 
 
 main :: IO ()
